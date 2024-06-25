@@ -85,118 +85,135 @@ function isElementInViewport(el) {
 		rect.right <= (window.innerWidth || document.documentElement.clientWidth)
 	)
 }
-
+// let isTrigger = true
+// function startFirstVideo(video) {
+// 	function videoHandler() {
+// 		video.playVideo()
+// 		clearInterval(handler)
+// 		startInterval()
+// 		isTrigger = false
+// 	}
+// 	if (isTrigger) {
+// 		window.addEventListener('scroll', videoHandler)
+// 	} else {
+// 		window.removeEventListener('scroll', videoHandler)
+// 	}
+// 	triggerFakeScroll()
+// }
 videos.forEach(video => {
 	window.YT.ready(function () {
-		let player // Переменная для хранения плеера текущего видео
+		let player // Variable to store the current video player
+		let isFirstVideo = true // Flag to track if it's the first video
 
-		// Создаем Intersection Observer
+		// Create Intersection Observer
 		const observer = new IntersectionObserver(entries => {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
-					// Если элемент видим
+					// If element is visible
 					if (!player) {
-						// Если плеер еще не создан
-						player = createPlayer(video) // Создаем плеер для текущего видео
+						// If player is not yet created
+						player = createPlayer(video)
+						if (isFirstVideo) {
+							console.log('s')
+							window.addEventListener('scroll', () => {
+								if (isFirstVideo) {
+									player.playVideo()
+									isFirstVideo = false
+								}
+							})
+						} else {
+						}
 					} else {
+						// If player is already created
 						player.playVideo()
-						clearInterval(handler)
-						startInterval()
 					}
 				} else {
-					// Если элемент не видим
+					// If element is not visible
 					if (player) {
 						player.pauseVideo()
-						startInterval() // Уничтожаем плеер
 					}
 				}
 			})
 		})
 
-		observer.observe(video) // Начинаем отслеживать видимость текущего видео
+		// Observe current video element
+		observer.observe(video)
 	})
-
-	// Функция для создания плеера для указанного видео
-	function createPlayer(video) {
-		const progressBar = video.querySelector('.progress__bar')
-		const progressValue = video.querySelector('.progress__value')
-		const pause = video.querySelector('.pause')
-		const poster = video.querySelector('.poster')
-		const width = progressBar.scrollWidth
-		let handler
-		let item
-		let progressVideo
-		let allTime
-		const iframe = video.querySelector('iframe')
-
-		const currentPlayer = new YT.Player(iframe.id, {
-			events: {
-				onReady: event => {
-					allTime = currentPlayer.getDuration()
-					item = +width / allTime
-					progressVideo = item * 10
-					poster.classList.add('_hide')
-					progressValue.style.width = `${progressVideo}px`
-					clearInterval(handler)
-					startInterval()
-					players.push(currentPlayer) // Добавляем текущий плеер в массив
-				},
-				onStateChange: event => {
-					if (event.data === YT.PlayerState.ENDED) {
-						progressVideo = item * 10
-						progressValue.style.width = `${progressVideo}px`
-						currentPlayer.seekTo(12, true)
-					}
-					if (event.data !== YT.PlayerState.PLAYING) {
-						clearInterval(handler)
-					} else {
-						clearInterval(handler)
-						startInterval()
-					}
-				},
-			},
-		})
-
-		progressBar.addEventListener('click', e => {
-			const rect = progressBar.getBoundingClientRect()
-			const x = e.clientX - rect.left
-			progressVideo = x
-			progressValue.style.width = `${progressVideo}px`
-			currentPlayer.seekTo(x / item, true)
-		})
-
-		pause.addEventListener('click', () => {
-			if (currentPlayer.isMuted()) {
-				currentPlayer.unMute()
-				pause.classList.add('_hide')
-			} else {
-				currentPlayer.mute()
-				pause.classList.remove('_hide')
-			}
-			// При изменении состояния звука, выключаем звук на остальных плеерах
-			players.forEach(otherPlayer => {
-				if (otherPlayer !== currentPlayer) {
-					otherPlayer.mute()
-				}
-			})
-		})
-
-		function startInterval() {
-			handler = setInterval(function () {
-				progressVideo += item
-				if (progressVideo / item > allTime) {
-					progressVideo = item * 12
-					progressValue.style.width = `${progressVideo}px`
-					currentPlayer.seekTo(12, true)
-				}
-				progressValue.style.width = `${progressVideo}px`
-			}, 1000)
-		}
-
-		return currentPlayer // Возвращаем созданный плеер
-	}
 })
 
+// Function to create a YouTube player for the given video element
+function createPlayer(video) {
+	const progressBar = video.querySelector('.progress__bar')
+	const progressValue = video.querySelector('.progress__value')
+	const pause = video.querySelector('.pause')
+	const poster = video.querySelector('.poster')
+	const iframe = video.querySelector('iframe')
+
+	let item
+	let progressVideo
+	let allTime
+	let handler
+
+	const currentPlayer = new YT.Player(iframe.id, {
+		events: {
+			onReady: event => {
+				allTime = currentPlayer.getDuration()
+				item = progressBar.scrollWidth / allTime
+				progressVideo = item * 10 // Adjust as needed
+				poster.classList.add('_hide')
+				progressValue.style.width = `${progressVideo}px`
+				startInterval()
+			},
+			onStateChange: event => {
+				if (event.data === YT.PlayerState.ENDED) {
+					currentPlayer.seekTo(12, true)
+				}
+				clearInterval(handler)
+				if (event.data === YT.PlayerState.PLAYING) {
+					startInterval()
+				}
+			},
+		},
+	})
+
+	progressBar.addEventListener('click', e => {
+		const rect = progressBar.getBoundingClientRect()
+		const x = e.clientX - rect.left
+		progressVideo = x
+		progressValue.style.width = `${progressVideo}px`
+		currentPlayer.seekTo(x / item, true)
+	})
+
+	pause.addEventListener('click', () => {
+		if (currentPlayer.isMuted()) {
+			currentPlayer.unMute()
+			pause.classList.add('_hide')
+		} else {
+			currentPlayer.mute()
+			pause.classList.remove('_hide')
+		}
+	})
+
+	function startInterval() {
+		handler = setInterval(() => {
+			progressVideo += item
+			if (progressVideo / item > allTime) {
+				progressVideo = item * 12
+				currentPlayer.seekTo(12, true)
+			}
+			progressValue.style.width = `${progressVideo}px`
+		}, 1000)
+	}
+
+	return currentPlayer
+}
+function triggerFakeScroll() {
+	window.scrollTo(0, 1)
+	setTimeout(() => {
+		window.scrollTo(0, 0)
+	}, 1000)
+}
+document.addEventListener('DOMContentLoaded', triggerFakeScroll)
 const itemsGallery = document.querySelectorAll('.product-block__tab-item')
 
 if (itemsGallery.length > 0) {
