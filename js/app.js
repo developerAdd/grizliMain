@@ -75,145 +75,127 @@ const videos = document.querySelectorAll('.video')
 const players = [] // Массив для хранения всех плееров
 
 // Функция для проверки, находится ли элемент в видимой области
-function isElementInViewport(el) {
-	const rect = el.getBoundingClientRect()
-	return (
-		rect.top >= 0 &&
-		rect.left >= 0 &&
-		rect.bottom <=
-			(window.innerHeight || document.documentElement.clientHeight) &&
-		rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-	)
-}
-// let isTrigger = true
-// function startFirstVideo(video) {
-// 	function videoHandler() {
-// 		video.playVideo()
-// 		clearInterval(handler)
-// 		startInterval()
-// 		isTrigger = false
-// 	}
-// 	if (isTrigger) {
-// 		window.addEventListener('scroll', videoHandler)
-// 	} else {
-// 		window.removeEventListener('scroll', videoHandler)
-// 	}
-// 	triggerFakeScroll()
-// }
 videos.forEach(video => {
 	window.YT.ready(function () {
-		let player // Variable to store the current video player
-		let isFirstVideo = true // Flag to track if it's the first video
-
-		// Create Intersection Observer
+		let player // Переменная для хранения плеера текущего видео
+		let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream // Проверка, что это iOS
+		if (isIOS) {
+			video.classList.add('paused')
+		}
+		// Создаем Intersection Observer
 		const observer = new IntersectionObserver(entries => {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
-					// If element is visible
+					// Если элемент видим
 					if (!player) {
-						// If player is not yet created
+						// Если плеер еще не создан
 						player = createPlayer(video)
-						if (isFirstVideo) {
-							console.log('s')
-							window.addEventListener('scroll', () => {
-								if (isFirstVideo) {
-									player.playVideo()
-									isFirstVideo = false
-								}
-							})
-						} else {
-						}
 					} else {
-						// If player is already created
 						player.playVideo()
+						clearInterval(handler)
+						startInterval()
 					}
 				} else {
-					// If element is not visible
+					video.classList.remove('paused')
 					if (player) {
 						player.pauseVideo()
+						startInterval() // Уничтожаем плеер
 					}
 				}
 			})
 		})
 
-		// Observe current video element
-		observer.observe(video)
+		observer.observe(video) // Начинаем отслеживать видимость текущего видео
 	})
-})
 
-// Function to create a YouTube player for the given video element
-function createPlayer(video) {
-	const progressBar = video.querySelector('.progress__bar')
-	const progressValue = video.querySelector('.progress__value')
-	const pause = video.querySelector('.pause')
-	const poster = video.querySelector('.poster')
-	const iframe = video.querySelector('iframe')
+	// Функция для создания плеера для указанного видео
+	function createPlayer(video) {
+		const progressBar = video.querySelector('.progress__bar')
+		const progressValue = video.querySelector('.progress__value')
+		const pause = video.querySelector('.pause')
+		const poster = video.querySelector('.poster')
+		const width = progressBar.scrollWidth
+		let handler
+		let item
+		let progressVideo
+		let allTime
+		const iframe = video.querySelector('iframe')
 
-	let item
-	let progressVideo
-	let allTime
-	let handler
-
-	const currentPlayer = new YT.Player(iframe.id, {
-		events: {
-			onReady: event => {
-				allTime = currentPlayer.getDuration()
-				item = progressBar.scrollWidth / allTime
-				progressVideo = item * 10 // Adjust as needed
-				poster.classList.add('_hide')
-				progressValue.style.width = `${progressVideo}px`
-				startInterval()
+		const currentPlayer = new YT.Player(iframe.id, {
+			events: {
+				onReady: event => {
+					allTime = currentPlayer.getDuration()
+					item = +width / allTime
+					progressVideo = item * 10
+					poster.classList.add('_hide')
+					progressValue.style.width = `${progressVideo}px`
+					clearInterval(handler)
+					if (!video.classList.contains('paused')) {
+						startInterval()
+					}
+					players.push(currentPlayer) // Добавляем текущий плеер в массив
+				},
+				onStateChange: event => {
+					if (event.data === YT.PlayerState.ENDED) {
+						progressVideo = item * 10
+						progressValue.style.width = `${progressVideo}px`
+						currentPlayer.seekTo(12, true)
+					}
+					if (event.data !== YT.PlayerState.PLAYING) {
+						clearInterval(handler)
+					} else {
+						clearInterval(handler)
+						startInterval()
+					}
+				},
 			},
-			onStateChange: event => {
-				if (event.data === YT.PlayerState.ENDED) {
+		})
+
+		progressBar.addEventListener('click', e => {
+			const rect = progressBar.getBoundingClientRect()
+			const x = e.clientX - rect.left
+			progressVideo = x
+			progressValue.style.width = `${progressVideo}px`
+			currentPlayer.seekTo(x / item, true)
+		})
+
+		pause.addEventListener('click', () => {
+			if (!video.classList.contains('paused')) {
+				if (currentPlayer.isMuted()) {
+					currentPlayer.unMute()
+					pause.classList.add('_hide')
+				} else {
+					currentPlayer.mute()
+					pause.classList.remove('_hide')
+				}
+				// При изменении состояния звука, выключаем звук на остальных плеерах
+				players.forEach(otherPlayer => {
+					if (otherPlayer !== currentPlayer) {
+						otherPlayer.mute()
+					}
+				})
+			} else {
+				video.classList.remove('paused')
+				currentPlayer.playVideo()
+			}
+		})
+
+		function startInterval() {
+			handler = setInterval(function () {
+				progressVideo += item
+				if (progressVideo / item > allTime) {
+					progressVideo = item * 12
+					progressValue.style.width = `${progressVideo}px`
 					currentPlayer.seekTo(12, true)
 				}
-				clearInterval(handler)
-				if (event.data === YT.PlayerState.PLAYING) {
-					startInterval()
-				}
-			},
-		},
-	})
-
-	progressBar.addEventListener('click', e => {
-		const rect = progressBar.getBoundingClientRect()
-		const x = e.clientX - rect.left
-		progressVideo = x
-		progressValue.style.width = `${progressVideo}px`
-		currentPlayer.seekTo(x / item, true)
-	})
-
-	pause.addEventListener('click', () => {
-		if (currentPlayer.isMuted()) {
-			currentPlayer.unMute()
-			pause.classList.add('_hide')
-		} else {
-			currentPlayer.mute()
-			pause.classList.remove('_hide')
+				progressValue.style.width = `${progressVideo}px`
+			}, 1000)
 		}
-	})
 
-	function startInterval() {
-		handler = setInterval(() => {
-			progressVideo += item
-			if (progressVideo / item > allTime) {
-				progressVideo = item * 12
-				currentPlayer.seekTo(12, true)
-			}
-			progressValue.style.width = `${progressVideo}px`
-		}, 1000)
+		return currentPlayer // Возвращаем созданный плеер
 	}
+})
 
-	return currentPlayer
-}
-function triggerFakeScroll() {
-	window.scrollTo(0, 1)
-	setTimeout(() => {
-		window.scrollTo(0, 0)
-	}, 1000)
-}
-document.addEventListener('DOMContentLoaded', triggerFakeScroll)
 const itemsGallery = document.querySelectorAll('.product-block__tab-item')
 
 if (itemsGallery.length > 0) {
